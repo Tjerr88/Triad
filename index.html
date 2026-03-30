@@ -118,14 +118,14 @@
   };
 
   const KB_STEPS = ['Low','Medium','Heavy','Ballistic'];
-  const CLUB_STEPS = ['Low A','Medium','Heavy','Low B'];
+  const CLUB_STEPS = ['Low A','Medium','Heavy','Medium B'];
   const CLUB_MODE_BY_STEP = {
-    'Low A':'double',
-    'Medium':'2h',
+    'Low':'double',
+    'Medium A':'2h',
     'Heavy':'2h',
-    'Low B':'double'
+    'Medium B':'double'
   };
-  const MACE_STEPS = ['Low A','Medium','Heavy','Low B'];
+  const MACE_STEPS = ['Low A','Medium','Heavy','Medium B'];
 
   const MACE_FLOWS = [
     '360 + Switch Squat → 360 + Step 1 → 360 + Step 2 → 360 + Step 3 → 360 + Step 4',
@@ -169,16 +169,16 @@
     { key:'ballistic', label:'Ballistic', bell:'n/a', reps:'fixed sets / reps', note:'1 ballistic hinge + 1 ballistic push' }
   ];
   const CB_PHASES = [
-    { key:'lowA', label:'Low A', mode:'Double Club focus', rounds:2, note:'2 rounds' },
-    { key:'medium', label:'Medium', mode:'Two-Handed Club focus', rounds:3, note:'3 rounds' },
-    { key:'heavy', label:'Heavy', mode:'Two-Handed Club focus', rounds:4, note:'4 rounds' },
-    { key:'lowB', label:'Low B', mode:'Double Club focus', rounds:2, note:'2 rounds · second low' }
+    { key:'lowA', label:'Low', mode:'Double Club focus', rounds:3, note:'3 rounds' },
+    { key:'medium', label:'Medium A', mode:'Two-Handed Club focus', rounds:4, note:'4 rounds' },
+    { key:'heavy', label:'Heavy', mode:'Two-Handed Club focus', rounds:5, note:'5 rounds' },
+    { key:'lowB', label:'Medium B', mode:'Double Club focus', rounds:4, note:'4 rounds · second medium' }
   ];
   const MB_PHASES = [
-    { key:'lowA', label:'Low A', rounds:2, note:'2 rounds' },
-    { key:'medium', label:'Medium', rounds:3, note:'3 rounds' },
-    { key:'heavy', label:'Heavy', rounds:4, note:'4 rounds' },
-    { key:'lowB', label:'Low B', rounds:2, note:'2 rounds · second low' }
+    { key:'lowA', label:'Low', rounds:3, note:'3 flow blocks' },
+    { key:'medium', label:'Medium A', rounds:4, note:'4 flow blocks' },
+    { key:'heavy', label:'Heavy', rounds:5, note:'5 flow blocks' },
+    { key:'lowB', label:'Medium B', rounds:4, note:'4 flow blocks · second medium' }
   ];
 
 
@@ -406,16 +406,16 @@
 
   function buildKbTimerState(phaseKey, hasCarry){
     if(phaseKey === 'low'){
-      const stages = [{ label:'Main · 10 min', seconds:600 }];
-      return { stages, stageIndex:0, stageLeft:600, isRunning:false };
+      const stages = [{ label:'Main · 15 min', seconds:900 }];
+      return { stages, stageIndex:0, stageLeft:900, isRunning:false };
     }
     if(phaseKey === 'medium'){
-      const stages = [{ label:'Main · 10 min', seconds:600 }];
+      const stages = [{ label:'Main · 15 min', seconds:900 }];
       if(hasCarry) stages.push({ label:'Carry · 5 min', seconds:300 });
       return { stages, stageIndex:0, stageLeft:stages[0].seconds, isRunning:false };
     }
     if(phaseKey === 'heavy'){
-      const stages = [{ label:'Main · 15 min', seconds:900 }];
+      const stages = [{ label:'Main · 20 min', seconds:1200 }];
       if(hasCarry) stages.push({ label:'Carry · 5 min', seconds:300 });
       return { stages, stageIndex:0, stageLeft:stages[0].seconds, isRunning:false };
     }
