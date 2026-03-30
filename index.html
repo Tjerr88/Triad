@@ -84,7 +84,7 @@
 
 <script>
 (() => {
-  const STORAGE_KEY = 'triad-generator-v25';
+  const STORAGE_KEY = 'triad-generator-v26';
   const SESSION_TYPES = ['Kettlebell','Clubbell','Mace','Active Recovery'];
 
   const KB_GRINDS = {
@@ -183,9 +183,9 @@
 
 
   const WAVE_PLANS = [
-    { kb:'medium', cb:'lowA', mb:'lowA' },
+    { kb:'high', cb:'lowA', mb:'medium' },
     { kb:'low', cb:'medium', mb:'high' },
-    { kb:'high', cb:'high', mb:'medium' },
+    { kb:'medium', cb:'high', mb:'lowA' },
     { kb:'ballistic', cb:'lowB', mb:'lowB' }
   ];
   const phaseByKey = (arr, key) => arr.find(x => x.key === key);
