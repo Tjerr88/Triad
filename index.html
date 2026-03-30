@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Triad 3.1</title>
+<title>Triad 3.2</title>
 <style>
   :root{
     --bg:#0b0f14;
@@ -87,13 +87,6 @@
   const STORAGE_KEY = 'triad-generator-v26';
   const SESSION_TYPES = ['Kettlebell','Clubbell','Mace','Active Recovery'];
 
-  const KB_GRINDS = {
-    squat: ['Double Front Squat','Reverse Lunge','Step Up'],
-    hinge: ['Single Leg Deadlift','Single Leg Hip Thrust','Good Morning'],
-    push: ['Military Press','Double Floor Press','Bridge Floor Press'],
-    pull: ['Pullover','Wide Row','Gorilla Row'],
-    carry: ['Suitcase Carry','Front Rack Carry','Get-Up']
-  };
 
   const CLUBBELL = {
     rhythmic: [
@@ -320,17 +313,6 @@
       completedSessions: 0,
       kbWeight: 16,
       bags: {
-        kb: {
-          squat: { bag: [], last: null },
-          hinge: { bag: [], last: null },
-          push: { bag: [], last: null },
-          pull: { bag: [], last: null },
-          carry: { bag: [], last: null }
-        },
-        kbBallistic: {
-          hinge: { bag: [], last: null },
-          push: { bag: [], last: null }
-        },
         clubbell: {
           rhythmic: { bag: [], last: null },
           ballistic: { bag: [], last: null },
@@ -349,16 +331,8 @@
       const loaded = raw ? { ...defaultState(), ...raw } : defaultState();
       if(loaded.activeSession){
         const s = loaded.activeSession;
-        if(s.type === 'Kettlebell' && s.phase){
-          s.picks = {
-            getUp: 'Get Up',
-            swing: 'One-Arm Swing',
-            press: 'Military Press',
-            clean: 'Double Clean',
-            squat: 'Double Front Squat',
-            snatch: 'Snatch'
-          };
-          s.timer = buildKbTimerState(s.phase.key);
+        if(s.type === 'Kettlebell'){
+          s.timer = null;
         }
         if(s.type === 'Clubbell' && s.phase){
           s.timer = buildClubbellTimerState(s.phase.rounds);
@@ -419,18 +393,6 @@
     return { stages, stageIndex: 0, stageLeft: stages[0].seconds, isRunning:false };
   }
 
-  function buildKbTimerState(phaseKey){
-    if(phaseKey === 'low'){
-      const stages = [{ label:'Main · 10 min', seconds:600 }];
-      return { stages, stageIndex:0, stageLeft:600, isRunning:false };
-    }
-    if(phaseKey === 'medium'){
-      const stages = [{ label:'Main · 15 min', seconds:900 }];
-      return { stages, stageIndex:0, stageLeft:stages[0].seconds, isRunning:false };
-    }
-    const stages = [{ label:'Main · 20 min', seconds:1200 }];
-    return { stages, stageIndex:0, stageLeft:1200, isRunning:false };
-  }
 
   function buildMaceTimerState(rounds){
     const stages = [];
@@ -455,7 +417,7 @@
         squat: 'Double Front Squat',
         snatch: 'Snatch'
       };
-      return { typeIndex, type, phase, picks, timer: buildKbTimerState(phase.key) };
+      return { typeIndex, type, phase, picks, timer: null };
     }
 
     if(type === 'Clubbell'){
@@ -673,7 +635,6 @@
   function resetTimerState(){
     const s = state.activeSession;
     if(!s?.timer) return;
-    if(s.type === 'Kettlebell') s.timer = buildKbTimerState(s.phase.key);
     if(s.type === 'Clubbell') s.timer = buildClubbellTimerState(s.phase.rounds);
     if(s.type === 'Mace') s.timer = buildMaceTimerState(s.phase.rounds);
     saveState();
