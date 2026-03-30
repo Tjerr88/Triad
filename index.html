@@ -350,6 +350,14 @@
       if(loaded.activeSession){
         const s = loaded.activeSession;
         if(s.type === 'Kettlebell' && s.phase){
+          s.picks = {
+            getUp: 'Get Up',
+            swing: 'One-Arm Swing',
+            press: 'Military Press',
+            clean: 'Double Clean',
+            squat: 'Double Front Squat',
+            snatch: 'Snatch'
+          };
           s.timer = buildKbTimerState(s.phase.key);
         }
         if(s.type === 'Clubbell' && s.phase){
