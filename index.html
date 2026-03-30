@@ -65,10 +65,9 @@
     <h1>Triad</h1>
     <div class="sub">Kettlebell · Clubbell · Mace · Active Recovery · mini-wave rotation</div>
     <div class="row">
-      <span class="pill">Day in cycle: <strong id="sessionNumber">1</strong></span>
+      <span class="pill">Position: <strong id="sessionCode">C1 · M1 · S1</strong></span>
       <span class="pill">Type: <strong id="sessionType">—</strong></span>
       <span class="pill">Focus: <strong id="sessionFocus">—</strong></span>
-      <span class="pill">Status: <strong id="sessionStatus">New</strong></span>
     </div>
   </section>
 
@@ -85,7 +84,7 @@
 
 <script>
 (() => {
-  const STORAGE_KEY = 'triad-generator-v16';
+  const STORAGE_KEY = 'triad-generator-v19';
   const SESSION_TYPES = ['Kettlebell','Clubbell','Mace','Active Recovery'];
 
   const KB_GRINDS = {
@@ -191,10 +190,9 @@
   ];
   const phaseByKey = (arr, key) => arr.find(x => x.key === key);
 
-  const sessionNumberEl = document.getElementById('sessionNumber');
+  const sessionCodeEl = document.getElementById('sessionCode');
   const sessionTypeEl = document.getElementById('sessionType');
   const sessionFocusEl = document.getElementById('sessionFocus');
-  const sessionStatusEl = document.getElementById('sessionStatus');
   const sessionCard = document.getElementById('sessionCard');
   const timerCard = document.getElementById('timerCard');
   const newBtn = document.getElementById('newBtn');
@@ -226,6 +224,7 @@
       nextSessionIndex: 0,
       activeSession: null,
       waveIndex: 0,
+      completedSessions: 0,
       bags: {
         kb: {
           squat: { bag: [], last: null },
@@ -400,10 +399,13 @@
 
   function renderSession(){
     const s = state.activeSession;
-    sessionNumberEl.textContent = String((s?.typeIndex ?? state.nextSessionIndex) + 1);
+    const completed = Number.isFinite(state.completedSessions) ? state.completedSessions : 0;
+    const cycle = Math.floor(completed / 16) + 1;
+    const mini = Math.floor((completed % 16) / 4) + 1;
+    const session = (completed % 4) + 1;
+    sessionCodeEl.textContent = `C${cycle} · M${mini} · S${session}`;
     sessionTypeEl.textContent = s ? s.type : SESSION_TYPES[state.nextSessionIndex];
     sessionFocusEl.textContent = s?.phase?.label || '—';
-    sessionStatusEl.textContent = s ? 'Active' : 'Ready';
 
     if(!s){
       sessionCard.innerHTML = `<div class="section-title">Ready</div><div class="small">Open the next session.</div>`;
@@ -594,6 +596,37 @@
     }
   }
 
+  function getCompletedCycles(){
+    const done = Number.isFinite(state.completedSessions) ? state.completedSessions : 0;
+    return Math.floor(done / 16);
+  }
+
+  function shouldOfferCycleDecision(){
+    const done = Number.isFinite(state.completedSessions) ? state.completedSessions : 0;
+    const completedCycles = getCompletedCycles();
+    return done > 0 && done % 16 === 0 && completedCycles >= 3;
+  }
+
+  function handleCycleDecision(){
+    const completedCycles = getCompletedCycles();
+    const goNext = window.confirm(`Cycle ${completedCycles} completed.\n\nPress OK for Next cycle.\nPress Cancel for Increase weight and start over.`);
+
+    if(goNext) return;
+
+    const currentWeight = Number.isFinite(Number(state.kbWeight)) ? Number(state.kbWeight) : 16;
+    const suggestedWeight = currentWeight + 4;
+    const entered = window.prompt('Enter your new kettlebell weight in kg. Leave as-is if you only want to restart the cycle count.', String(suggestedWeight));
+
+    if(entered !== null){
+      const parsed = Number(entered);
+      if(Number.isFinite(parsed) && parsed >= 0) state.kbWeight = parsed;
+    }
+
+    state.completedSessions = 0;
+    state.waveIndex = 0;
+    state.nextSessionIndex = 0;
+  }
+
   async function finishSession(){
     if(!state.activeSession) return;
     const finishedType = state.activeSession.type;
@@ -602,7 +635,11 @@
     await finishBeep();
     advanceInternalPhase(finishedType);
     state.activeSession = null;
+    state.completedSessions = (Number.isFinite(state.completedSessions) ? state.completedSessions : 0) + 1;
     state.nextSessionIndex = (state.nextSessionIndex + 1) % SESSION_TYPES.length;
+
+    if(shouldOfferCycleDecision()) handleCycleDecision();
+
     ensureSession();
     saveState();
     renderSession();
