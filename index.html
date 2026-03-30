@@ -84,7 +84,7 @@
 
 <script>
 (() => {
-  const STORAGE_KEY = 'triad-generator-v19';
+  const STORAGE_KEY = 'triad-generator-v21';
   const SESSION_TYPES = ['Kettlebell','Clubbell','Mace','Active Recovery'];
 
   const KB_GRINDS = {
@@ -117,15 +117,15 @@
     ]
   };
 
-  const KB_STEPS = ['Low','Medium','High','Ballistic'];
-  const CLUB_STEPS = ['Low','Medium A','High','Medium B'];
+  const KB_STEPS = ['Low','Medium','Heavy','Ballistic'];
+  const CLUB_STEPS = ['Low A','Medium','Heavy','Low B'];
   const CLUB_MODE_BY_STEP = {
-    'Low':'single',
-    'Medium A':'double',
-    'High':'2h',
-    'Medium B':'double'
+    'Low A':'double',
+    'Medium':'2h',
+    'Heavy':'2h',
+    'Low B':'double'
   };
-  const MACE_STEPS = ['Low','Medium A','High','Medium B'];
+  const MACE_STEPS = ['Low A','Medium','Heavy','Low B'];
 
   const MACE_FLOWS = [
     '360 + Switch Squat → 360 + Step 1 → 360 + Step 2 → 360 + Step 3 → 360 + Step 4',
@@ -163,32 +163,134 @@
   };
 
   const KB_PHASES = [
-    { key:'low', label:'Low', bell:'-1 bell', reps:'12+ reps', note:'lighter volume / practice' },
-    { key:'medium', label:'Medium', bell:'medium bell', reps:'8–11 reps', note:'standard main work' },
-    { key:'high', label:'High', bell:'+1 bell', reps:'4–7 reps', note:'heavier grind work + carry' },
+    { key:'low', label:'Low', bell:'medium bell', reps:'8–11 reps', note:'standard main work' },
+    { key:'medium', label:'Medium', bell:'+1 bell', reps:'4–7 reps', note:'heavier grind work + carry' },
+    { key:'heavy', label:'Heavy', bell:'+2 bells if ready', reps:'3–5 reps', note:'heavy grind work + carry' },
     { key:'ballistic', label:'Ballistic', bell:'n/a', reps:'fixed sets / reps', note:'1 ballistic hinge + 1 ballistic push' }
   ];
   const CB_PHASES = [
-    { key:'low', label:'Low', mode:'Single Club focus', rounds:1, note:'1 round' },
-    { key:'mediumA', label:'Medium A', mode:'Double Club focus', rounds:2, note:'2 rounds' },
-    { key:'high', label:'High', mode:'Two-Handed Club focus', rounds:3, note:'3 rounds' },
-    { key:'mediumB', label:'Medium B', mode:'Double Club focus', rounds:2, note:'2 rounds · second medium' }
+    { key:'lowA', label:'Low A', mode:'Double Club focus', rounds:2, note:'2 rounds' },
+    { key:'medium', label:'Medium', mode:'Two-Handed Club focus', rounds:3, note:'3 rounds' },
+    { key:'heavy', label:'Heavy', mode:'Two-Handed Club focus', rounds:4, note:'4 rounds' },
+    { key:'lowB', label:'Low B', mode:'Double Club focus', rounds:2, note:'2 rounds · second low' }
   ];
   const MB_PHASES = [
-    { key:'low', label:'Low', rounds:1, note:'1 round = 5 left + 5 right' },
-    { key:'mediumA', label:'Medium A', rounds:2, note:'2 rounds' },
-    { key:'high', label:'High', rounds:3, note:'3 rounds' },
-    { key:'mediumB', label:'Medium B', rounds:2, note:'2 rounds · second medium' }
+    { key:'lowA', label:'Low A', rounds:2, note:'2 rounds' },
+    { key:'medium', label:'Medium', rounds:3, note:'3 rounds' },
+    { key:'heavy', label:'Heavy', rounds:4, note:'4 rounds' },
+    { key:'lowB', label:'Low B', rounds:2, note:'2 rounds · second low' }
   ];
 
 
   const WAVE_PLANS = [
-    { kb:'high', cb:'low', mb:'mediumA' },
-    { kb:'low', cb:'mediumA', mb:'high' },
-    { kb:'medium', cb:'high', mb:'low' },
-    { kb:'ballistic', cb:'mediumB', mb:'mediumB' }
+    { kb:'medium', cb:'lowA', mb:'lowA' },
+    { kb:'low', cb:'medium', mb:'heavy' },
+    { kb:'heavy', cb:'heavy', mb:'medium' },
+    { kb:'ballistic', cb:'lowB', mb:'lowB' }
   ];
   const phaseByKey = (arr, key) => arr.find(x => x.key === key);
+
+
+  function getReadinessScore(){
+    const message = [
+      'Readiness today? Enter 1-5.',
+      '',
+      '1 = Not today. Very low energy, sore, tense, or drained.',
+      '2 = Reduced. Can train, but not fresh enough for the planned version.',
+      '3 = Normal. Good enough for the planned session.',
+      '4 = Good. Energetic, fairly fresh, moving well.',
+      '5 = Great. Very fresh, sharp, and ready.',
+      '',
+      '1-2 = step down',
+      '3-5 = run as planned'
+    ].join('\n');
+
+    const entered = window.prompt(message, '3');
+    const parsed = Number(entered);
+    return Number.isInteger(parsed) && parsed >= 1 && parsed <= 5 ? parsed : 3;
+  }
+
+  function downgradeSession(session){
+    if(!session || session.type === 'Active Recovery'){
+      return { ...session, readinessScore: session?.readinessScore ?? 3, adjusted:false };
+    }
+
+    const plannedPhase = session.phase;
+
+    if(session.type === 'Kettlebell'){
+      if(plannedPhase.key === 'low'){
+        return {
+          typeIndex: session.typeIndex,
+          type: 'Active Recovery',
+          picks: ACTIVE_RECOVERY,
+          timer: null,
+          plannedType: 'Kettlebell',
+          plannedPhase,
+          readinessScore: session.readinessScore,
+          adjusted: true,
+          adjustedReason: 'Low downgraded to Active Recovery'
+        };
+      }
+      const nextKey = plannedPhase.key === 'heavy' ? 'medium' : 'low';
+      const downgraded = createSession(session.typeIndex, nextKey);
+      downgraded.plannedType = session.type;
+      downgraded.plannedPhase = plannedPhase;
+      downgraded.readinessScore = session.readinessScore;
+      downgraded.adjusted = true;
+      downgraded.adjustedReason = `${plannedPhase.label} downgraded to ${downgraded.phase.label}`;
+      return downgraded;
+    }
+
+    if(session.type === 'Clubbell'){
+      if(plannedPhase.key === 'lowA' || plannedPhase.key === 'lowB'){
+        return {
+          typeIndex: session.typeIndex,
+          type: 'Active Recovery',
+          picks: ACTIVE_RECOVERY,
+          timer: null,
+          plannedType: 'Clubbell',
+          plannedPhase,
+          readinessScore: session.readinessScore,
+          adjusted: true,
+          adjustedReason: `${plannedPhase.label} downgraded to Active Recovery`
+        };
+      }
+      const nextKey = plannedPhase.key === 'heavy' ? 'medium' : 'lowA';
+      const downgraded = createSession(session.typeIndex, nextKey);
+      downgraded.plannedType = session.type;
+      downgraded.plannedPhase = plannedPhase;
+      downgraded.readinessScore = session.readinessScore;
+      downgraded.adjusted = true;
+      downgraded.adjustedReason = `${plannedPhase.label} downgraded to ${downgraded.phase.label}`;
+      return downgraded;
+    }
+
+    if(session.type === 'Mace'){
+      if(plannedPhase.key === 'lowA' || plannedPhase.key === 'lowB'){
+        return {
+          typeIndex: session.typeIndex,
+          type: 'Active Recovery',
+          picks: ACTIVE_RECOVERY,
+          timer: null,
+          plannedType: 'Mace',
+          plannedPhase,
+          readinessScore: session.readinessScore,
+          adjusted: true,
+          adjustedReason: `${plannedPhase.label} downgraded to Active Recovery`
+        };
+      }
+      const nextKey = plannedPhase.key === 'heavy' ? 'medium' : 'lowA';
+      const downgraded = createSession(session.typeIndex, nextKey);
+      downgraded.plannedType = session.type;
+      downgraded.plannedPhase = plannedPhase;
+      downgraded.readinessScore = session.readinessScore;
+      downgraded.adjusted = true;
+      downgraded.adjustedReason = `${plannedPhase.label} downgraded to ${downgraded.phase.label}`;
+      return downgraded;
+    }
+
+    return { ...session, readinessScore: session.readinessScore, adjusted:false };
+  }
 
   const sessionCodeEl = document.getElementById('sessionCode');
   const sessionTypeEl = document.getElementById('sessionType');
@@ -225,6 +327,7 @@
       activeSession: null,
       waveIndex: 0,
       completedSessions: 0,
+      kbWeight: 16,
       bags: {
         kb: {
           squat: { bag: [], last: null },
@@ -307,10 +410,11 @@
       return { stages, stageIndex:0, stageLeft:600, isRunning:false };
     }
     if(phaseKey === 'medium'){
-      const stages = [{ label:'Main · 15 min', seconds:900 }];
-      return { stages, stageIndex:0, stageLeft:900, isRunning:false };
+      const stages = [{ label:'Main · 10 min', seconds:600 }];
+      if(hasCarry) stages.push({ label:'Carry · 5 min', seconds:300 });
+      return { stages, stageIndex:0, stageLeft:stages[0].seconds, isRunning:false };
     }
-    if(phaseKey === 'high'){
+    if(phaseKey === 'heavy'){
       const stages = [{ label:'Main · 15 min', seconds:900 }];
       if(hasCarry) stages.push({ label:'Carry · 5 min', seconds:300 });
       return { stages, stageIndex:0, stageLeft:stages[0].seconds, isRunning:false };
@@ -328,12 +432,12 @@
     return { stages, stageIndex: 0, stageLeft: 0, isRunning:false, manual:true };
   }
 
-  function createSession(typeIndex){
+  function createSession(typeIndex, forcedPhaseKey = null){
     const type = SESSION_TYPES[typeIndex];
 
     if(type === 'Kettlebell'){
       const wave = WAVE_PLANS[state.waveIndex % WAVE_PLANS.length];
-      const phase = phaseByKey(KB_PHASES, wave.kb);
+      const phase = phaseByKey(KB_PHASES, forcedPhaseKey || wave.kb);
       if(phase.key === 'ballistic'){
         const picks = {
           hinge: pickFromBucket(state.bags.kbBallistic.hinge, KB_BALLISTICS.hinge),
@@ -346,14 +450,14 @@
         hinge: pickFromBucket(state.bags.kb.hinge, KB_GRINDS.hinge),
         push: pickFromBucket(state.bags.kb.push, KB_GRINDS.push),
         pull: pickFromBucket(state.bags.kb.pull, KB_GRINDS.pull),
-        carry: phase.key === 'high' ? pickFromBucket(state.bags.kb.carry, KB_GRINDS.carry) : null
+        carry: ['medium','heavy'].includes(phase.key) ? pickFromBucket(state.bags.kb.carry, KB_GRINDS.carry) : null
       };
       return { typeIndex, type, phase, picks, timer: buildKbTimerState(phase.key, !!picks.carry) };
     }
 
     if(type === 'Clubbell'){
       const wave = WAVE_PLANS[state.waveIndex % WAVE_PLANS.length];
-      const phase = phaseByKey(CB_PHASES, wave.cb);
+      const phase = phaseByKey(CB_PHASES, forcedPhaseKey || wave.cb);
       const mode = CLUB_MODE_BY_STEP[phase.label] || 'single';
       const picks = {
         rhythmic: pickClubbellByMode(state.bags.clubbell.rhythmic, CLUBBELL.rhythmic, mode),
@@ -365,7 +469,7 @@
 
     if(type === 'Mace'){
       const wave = WAVE_PLANS[state.waveIndex % WAVE_PLANS.length];
-      const phase = phaseByKey(MB_PHASES, wave.mb);
+      const phase = phaseByKey(MB_PHASES, forcedPhaseKey || wave.mb);
       const flow = pickFromBucket(state.bags.mace.flow, MACE_FLOWS);
       return { typeIndex, type, phase, picks:{ flow }, timer: buildMaceTimerState(phase.rounds) };
     }
@@ -405,10 +509,11 @@
     const session = (completed % 4) + 1;
     sessionCodeEl.textContent = `C${cycle} · M${mini} · S${session}`;
     sessionTypeEl.textContent = s ? s.type : SESSION_TYPES[state.nextSessionIndex];
-    sessionFocusEl.textContent = s?.phase?.label || '—';
+    sessionFocusEl.textContent = s?.phase?.label || 'Active Recovery';
+    const readinessHtml = s ? `<div class="small" style="margin:0 0 12px">Readiness: <strong style="color:var(--text)">${s.readinessScore ?? 3}/5</strong>${s.adjusted ? ` · ${s.adjustedReason}` : ' · Run as planned'}</div>` : '';
 
     if(!s){
-      sessionCard.innerHTML = `<div class="section-title">Ready</div><div class="small">Open the next session.</div>`;
+      sessionCard.innerHTML = `<div class="section-title">Ready</div><div class="small">Open the next session. You will get a 1–5 readiness check before the session appears.</div>`;
       renderTimer();
       return;
     }
@@ -416,7 +521,7 @@
     if(s.type === 'Kettlebell'){
       if(s.phase.key === 'ballistic'){
         sessionCard.innerHTML = `
-          <div class="section-title">Kettlebell — ${s.phase.label}</div>
+          ${readinessHtml}<div class="section-title">Kettlebell — ${s.phase.label}</div>
           <div class="small">${s.phase.note} · 5 sets per exercise.</div>
           <div class="grid grid-2" style="margin-top:12px">
             <div class="exercise"><div class="name">${s.picks.hinge}</div><div class="meta">Ballistic hinge</div></div>
@@ -431,7 +536,7 @@
         ];
         if(s.picks.carry) cards.push(['Loaded Carry', s.picks.carry]);
         sessionCard.innerHTML = `
-          <div class="section-title">Kettlebell — ${s.phase.label}</div>
+          ${readinessHtml}<div class="section-title">Kettlebell — ${s.phase.label}</div>
           <div class="small">${s.phase.bell} · ${s.phase.reps}</div>
           <div class="grid grid-2" style="margin-top:12px">
             ${cards.map(([label,name]) => `<div class="exercise"><div class="name">${name}</div><div class="meta">${label}</div></div>`).join('')}
@@ -464,7 +569,7 @@
     }
 
     sessionCard.innerHTML = `
-      <div class="section-title">Active Recovery</div>
+      ${readinessHtml}<div class="section-title">Active Recovery</div>
       <div class="small">Rustig bewegen. Geen timer nodig.</div>
       <div class="grid" style="margin-top:12px">
         <div class="exercise"><div class="name">Hips</div><div class="meta">${s.picks.hips.join(' • ')}</div></div>
@@ -508,7 +613,14 @@
 
   function ensureSession(){
     if(state.activeSession) return;
-    state.activeSession = createSession(state.nextSessionIndex);
+    const readinessScore = getReadinessScore();
+    let session = createSession(state.nextSessionIndex);
+    session.readinessScore = readinessScore;
+    session.plannedType = session.type;
+    session.plannedPhase = session.phase || null;
+    session.adjusted = false;
+    if(readinessScore <= 2) session = downgradeSession(session);
+    state.activeSession = session;
     saveState();
     renderSession();
   }
