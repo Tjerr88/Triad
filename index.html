@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Triad</title>
+<title>Triad 3.1</title>
 <style>
   :root{
     --bg:#0b0f14;
@@ -63,7 +63,7 @@
 <div class="app">
   <section class="card top">
     <h1>Triad</h1>
-    <div class="sub">Kettlebell · Clubbell · Mace · Active Recovery · mini-wave rotation</div>
+    <div class="sub">Kettlebell · Clubbell · Mace · Active Recovery · 3-step mini-wave</div>
     <div class="row">
       <span class="pill">Position: <strong id="sessionCode">C1 · M1 · S1</strong></span>
       <span class="pill">Type: <strong id="sessionType">—</strong></span>
@@ -94,10 +94,6 @@
     pull: ['Pullover','Wide Row','Gorilla Row'],
     carry: ['Suitcase Carry','Front Rack Carry','Get-Up']
   };
-  const KB_BALLISTICS = {
-    hinge: ['One-Arm Swing','Two-Arm Swing','Snatch'],
-    push: ['Clean & Jerk','Push Press','Push Jerk']
-  };
 
   const CLUBBELL = {
     rhythmic: [
@@ -117,15 +113,14 @@
     ]
   };
 
-  const KB_STEPS = ['Low','Medium','High','Ballistic'];
-  const CLUB_STEPS = ['Low','Medium A','High','Medium B'];
+  const KB_STEPS = ['Low','Medium','High'];
+  const CLUB_STEPS = ['Low','Medium','High'];
   const CLUB_MODE_BY_STEP = {
-    'Low':'double',
-    'Medium A':'2h',
-    'High':'2h',
-    'Medium B':'double'
+    'Low':'single',
+    'Medium':'2h',
+    'High':'double'
   };
-  const MACE_STEPS = ['Low','Medium A','High','Medium B'];
+  const MACE_STEPS = ['Low','Medium','High'];
 
   const MACE_FLOWS = [
     '360 + Switch Squat → 360 + Step 1 → 360 + Step 2 → 360 + Step 3 → 360 + Step 4',
@@ -163,30 +158,26 @@
   };
 
   const KB_PHASES = [
-    { key:'low', label:'Low', bell:'-1 bell', reps:'12+ reps', note:'lighter main work' },
-    { key:'medium', label:'Medium', bell:'medium bell', reps:'8–11 reps', note:'standard main work + carry' },
-    { key:'high', label:'High', bell:'+1 bell', reps:'4–7 reps', note:'higher-intensity grind work + carry' },
-    { key:'ballistic', label:'Ballistic', bell:'n/a', reps:'sets of 10 in 20 minutes', note:'1 ballistic hinge + 1 ballistic push · no carry' }
+    { key:'low', label:'Low', bell:'-1 bell', reps:'8–12 reps', note:'3 sets across the Big Six' },
+    { key:'medium', label:'Medium', bell:'normal bell', reps:'6–8 reps', note:'3 sets across the Big Six' },
+    { key:'high', label:'High', bell:'+1 bell', reps:'3–5 reps', note:'3 sets across the Big Six' }
   ];
   const CB_PHASES = [
-    { key:'lowA', label:'Low', mode:'Double Club focus', rounds:3, note:'3 rounds' },
-    { key:'medium', label:'Medium A', mode:'Two-Handed Club focus', rounds:4, note:'4 rounds' },
-    { key:'high', label:'High', mode:'Two-Handed Club focus', rounds:5, note:'5 rounds' },
-    { key:'lowB', label:'Medium B', mode:'Double Club focus', rounds:4, note:'4 rounds · second medium' }
+    { key:'low', label:'Low', mode:'Single Club focus', rounds:3, note:'3 rounds' },
+    { key:'medium', label:'Medium', mode:'Two-Handed Club focus', rounds:4, note:'4 rounds' },
+    { key:'high', label:'High', mode:'Double Club focus', rounds:5, note:'5 rounds' }
   ];
   const MB_PHASES = [
-    { key:'lowA', label:'Low', rounds:3, note:'3 flow blocks' },
-    { key:'medium', label:'Medium A', rounds:4, note:'4 flow blocks' },
-    { key:'high', label:'High', rounds:5, note:'5 flow blocks' },
-    { key:'lowB', label:'Medium B', rounds:4, note:'4 flow blocks · second medium' }
+    { key:'low', label:'Low', rounds:3, note:'2–3 flow blocks · about 2:00 rest between blocks' },
+    { key:'medium', label:'Medium', rounds:4, note:'3–4 flow blocks · about 2:00 rest between blocks' },
+    { key:'high', label:'High', rounds:5, note:'4–5 flow blocks · about 2:00 rest between blocks' }
   ];
 
 
   const WAVE_PLANS = [
-    { kb:'high', cb:'lowA', mb:'medium' },
+    { kb:'high', cb:'low', mb:'medium' },
     { kb:'low', cb:'medium', mb:'high' },
-    { kb:'medium', cb:'high', mb:'lowA' },
-    { kb:'ballistic', cb:'lowB', mb:'lowB' }
+    { kb:'medium', cb:'high', mb:'low' }
   ];
   const phaseByKey = (arr, key) => arr.find(x => x.key === key);
 
@@ -242,7 +233,7 @@
     }
 
     if(session.type === 'Clubbell'){
-      if(plannedPhase.key === 'lowA' || plannedPhase.key === 'lowB'){
+      if(plannedPhase.key === 'low'){
         return {
           typeIndex: session.typeIndex,
           type: 'Active Recovery',
@@ -266,7 +257,7 @@
     }
 
     if(session.type === 'Mace'){
-      if(plannedPhase.key === 'lowA' || plannedPhase.key === 'lowB'){
+      if(plannedPhase.key === 'low'){
         return {
           typeIndex: session.typeIndex,
           type: 'Active Recovery',
@@ -359,7 +350,7 @@
       if(loaded.activeSession){
         const s = loaded.activeSession;
         if(s.type === 'Kettlebell' && s.phase){
-          s.timer = buildKbTimerState(s.phase.key, !!s.picks?.carry);
+          s.timer = buildKbTimerState(s.phase.key);
         }
         if(s.type === 'Clubbell' && s.phase){
           s.timer = buildClubbellTimerState(s.phase.rounds);
@@ -420,30 +411,24 @@
     return { stages, stageIndex: 0, stageLeft: stages[0].seconds, isRunning:false };
   }
 
-  function buildKbTimerState(phaseKey, hasCarry){
+  function buildKbTimerState(phaseKey){
     if(phaseKey === 'low'){
       const stages = [{ label:'Main · 10 min', seconds:600 }];
       return { stages, stageIndex:0, stageLeft:600, isRunning:false };
     }
     if(phaseKey === 'medium'){
       const stages = [{ label:'Main · 15 min', seconds:900 }];
-      if(hasCarry) stages.push({ label:'Carry · 5 min', seconds:300 });
       return { stages, stageIndex:0, stageLeft:stages[0].seconds, isRunning:false };
     }
-    if(phaseKey === 'high'){
-      const stages = [{ label:'Main · 20 min', seconds:1200 }];
-      if(hasCarry) stages.push({ label:'Carry · 5 min', seconds:300 });
-      return { stages, stageIndex:0, stageLeft:stages[0].seconds, isRunning:false };
-    }
-    const stages = [{ label:'Ballistic · 20 min', seconds:1200 }];
+    const stages = [{ label:'Main · 20 min', seconds:1200 }];
     return { stages, stageIndex:0, stageLeft:1200, isRunning:false };
   }
 
   function buildMaceTimerState(rounds){
     const stages = [];
     for(let round=1; round<=rounds; round++){
-      stages.push({ label: `Round ${round} · 5 left`, seconds: 0 });
-      stages.push({ label: `Round ${round} · 5 right`, seconds: 0 });
+      stages.push({ label: `Block ${round} · Left`, seconds: 0 });
+      stages.push({ label: `Block ${round} · Right`, seconds: 0 });
     }
     return { stages, stageIndex: 0, stageLeft: 0, isRunning:false, manual:true };
   }
@@ -454,21 +439,15 @@
     if(type === 'Kettlebell'){
       const wave = WAVE_PLANS[state.waveIndex % WAVE_PLANS.length];
       const phase = phaseByKey(KB_PHASES, forcedPhaseKey || wave.kb);
-      if(phase.key === 'ballistic'){
-        const picks = {
-          hinge: pickFromBucket(state.bags.kbBallistic.hinge, KB_BALLISTICS.hinge),
-          push: pickFromBucket(state.bags.kbBallistic.push, KB_BALLISTICS.push)
-        };
-        return { typeIndex, type, phase, picks, timer: buildKbTimerState(phase.key, false) };
-      }
       const picks = {
-        squat: pickFromBucket(state.bags.kb.squat, KB_GRINDS.squat),
-        hinge: pickFromBucket(state.bags.kb.hinge, KB_GRINDS.hinge),
-        push: pickFromBucket(state.bags.kb.push, KB_GRINDS.push),
-        pull: pickFromBucket(state.bags.kb.pull, KB_GRINDS.pull),
-        carry: ['medium','high'].includes(phase.key) ? pickFromBucket(state.bags.kb.carry, KB_GRINDS.carry) : null
+        getUp: 'Get Up',
+        swing: 'One-Arm Swing',
+        press: 'Military Press',
+        clean: 'Double Clean',
+        squat: 'Double Front Squat',
+        snatch: 'Snatch'
       };
-      return { typeIndex, type, phase, picks, timer: buildKbTimerState(phase.key, !!picks.carry) };
+      return { typeIndex, type, phase, picks, timer: buildKbTimerState(phase.key) };
     }
 
     if(type === 'Clubbell'){
@@ -520,8 +499,8 @@
   function renderSession(){
     const s = state.activeSession;
     const completed = Number.isFinite(state.completedSessions) ? state.completedSessions : 0;
-    const cycle = Math.floor(completed / 16) + 1;
-    const mini = Math.floor((completed % 16) / 4) + 1;
+    const cycle = Math.floor(completed / 12) + 1;
+    const mini = Math.floor((completed % 12) / 4) + 1;
     const session = (completed % 4) + 1;
     sessionCodeEl.textContent = `C${cycle} · M${mini} · S${session}`;
     sessionTypeEl.textContent = s ? s.type : SESSION_TYPES[state.nextSessionIndex];
@@ -535,29 +514,20 @@
     }
 
     if(s.type === 'Kettlebell'){
-      if(s.phase.key === 'ballistic'){
-        sessionCard.innerHTML = `
-          ${readinessHtml}<div class="section-title">Kettlebell — ${s.phase.label}</div>
-          <div class="small">${s.phase.note}</div>
-          <div class="grid grid-2" style="margin-top:12px">
-            <div class="exercise"><div class="name">${s.picks.hinge}</div><div class="meta">Ballistic hinge</div></div>
-            <div class="exercise"><div class="name">${s.picks.push}</div><div class="meta">Ballistic push</div></div>
-          </div>`;
-      } else {
-        const cards = [
-          ['Squat', s.picks.squat],
-          ['Hinge', s.picks.hinge],
-          ['Push', s.picks.push],
-          ['Pull', s.picks.pull]
-        ];
-        if(s.picks.carry) cards.push(['Loaded Carry', s.picks.carry]);
-        sessionCard.innerHTML = `
-          ${readinessHtml}<div class="section-title">Kettlebell — ${s.phase.label}</div>
-          <div class="small">${s.phase.bell} · ${s.phase.reps}</div>
-          <div class="grid grid-2" style="margin-top:12px">
-            ${cards.map(([label,name]) => `<div class="exercise"><div class="name">${name}</div><div class="meta">${label}</div></div>`).join('')}
-          </div>`;
-      }
+      const cards = [
+        ['Get Up', s.picks.getUp],
+        ['One-Arm Swing', s.picks.swing],
+        ['Military Press', s.picks.press],
+        ['Double Clean', s.picks.clean],
+        ['Double Front Squat', s.picks.squat],
+        ['Snatch', s.picks.snatch]
+      ];
+      sessionCard.innerHTML = `
+        ${readinessHtml}<div class="section-title">Kettlebell — ${s.phase.label}</div>
+        <div class="small">${s.phase.bell} · ${s.phase.reps} · 3 sets of the Big Six</div>
+        <div class="grid grid-2" style="margin-top:12px">
+          ${cards.map(([label,name]) => `<div class="exercise"><div class="name">${name}</div><div class="meta">${label}</div></div>`).join('')}
+        </div>`;
       renderTimer();
       return;
     }
@@ -695,7 +665,7 @@
   function resetTimerState(){
     const s = state.activeSession;
     if(!s?.timer) return;
-    if(s.type === 'Kettlebell') s.timer = buildKbTimerState(s.phase.key, !!s.picks.carry);
+    if(s.type === 'Kettlebell') s.timer = buildKbTimerState(s.phase.key);
     if(s.type === 'Clubbell') s.timer = buildClubbellTimerState(s.phase.rounds);
     if(s.type === 'Mace') s.timer = buildMaceTimerState(s.phase.rounds);
     saveState();
@@ -726,13 +696,13 @@
 
   function getCompletedCycles(){
     const done = Number.isFinite(state.completedSessions) ? state.completedSessions : 0;
-    return Math.floor(done / 16);
+    return Math.floor(done / 12);
   }
 
   function shouldOfferCycleDecision(){
     const done = Number.isFinite(state.completedSessions) ? state.completedSessions : 0;
     const completedCycles = getCompletedCycles();
-    return done > 0 && done % 16 === 0 && completedCycles >= 3;
+    return done > 0 && done % 12 === 0 && completedCycles >= 3;
   }
 
   function handleCycleDecision(){
