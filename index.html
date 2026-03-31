@@ -335,7 +335,7 @@
           s.timer = null;
         }
         if(s.type === 'Clubbell' && s.phase){
-          s.timer = buildClubbellTimerState(s.phase.rounds);
+          s.timer = buildClubbellTimerState(s.phase);
         }
         if(s.type === 'Mace' && s.phase){
           s.timer = buildMaceTimerState(s.phase.rounds);
@@ -382,15 +382,26 @@
     return picked;
   }
 
-  function buildClubbellTimerState(rounds){
+  function buildClubbellTimerState(phase){
+    const rounds = phase.rounds;
+    const mode = CLUB_MODE_BY_STEP[phase.label] || 'single';
     const stages = [];
+    const splitStage = (label) => {
+      if(mode === 'double') return [{ label, seconds: 60 }];
+      const firstHalf = mode === 'single' ? `${label} · 30s Left / Side A` : `${label} · 30s Grip A`;
+      const secondHalf = mode === 'single' ? `${label} · 30s Right / Side B` : `${label} · 30s Grip B`;
+      return [
+        { label: firstHalf, seconds: 30 },
+        { label: secondHalf, seconds: 30, cue: 'half' }
+      ];
+    };
     for(let round=1; round<=rounds; round++){
-      stages.push({ label: `Round ${round} · A`, seconds: 60 });
-      stages.push({ label: `Round ${round} · B`, seconds: 60 });
-      stages.push({ label: `Round ${round} · C`, seconds: 60 });
+      stages.push(...splitStage(`Round ${round} · A`));
+      stages.push(...splitStage(`Round ${round} · B`));
+      stages.push(...splitStage(`Round ${round} · C`));
       if(round < rounds) stages.push({ label: `Rest after round ${round}`, seconds: 60 });
     }
-    return { stages, stageIndex: 0, stageLeft: stages[0].seconds, isRunning:false };
+    return { stages, stageIndex: 0, stageLeft: stages[0].seconds, isRunning:false, mode };
   }
 
 
@@ -429,7 +440,7 @@
         ballistic: pickClubbellByMode(state.bags.clubbell.ballistic, CLUBBELL.ballistic, mode),
         grinds: pickClubbellByMode(state.bags.clubbell.grinds, CLUBBELL.grinds, mode)
       };
-      return { typeIndex, type, phase, picks, timer: buildClubbellTimerState(phase.rounds) };
+      return { typeIndex, type, phase, picks, timer: buildClubbellTimerState(phase) };
     }
 
     if(type === 'Mace'){
@@ -464,6 +475,7 @@
     }catch(e){}
   }
   async function stageBeep(){ await beep(860,.12,.07); setTimeout(()=>beep(1140,.14,.07),140); }
+  async function halfBeep(){ await beep(1240,.18,.11); setTimeout(()=>beep(1560,.22,.11),170); }
   async function finishBeep(){ await beep(860,.12,.07); setTimeout(()=>beep(1140,.12,.07),140); setTimeout(()=>beep(1460,.18,.08),280); }
 
   function renderSession(){
@@ -505,7 +517,7 @@
     if(s.type === 'Clubbell'){
       sessionCard.innerHTML = `
         <div class="section-title">Clubbell — ${s.phase.label}</div>
-        <div class="small">${s.phase.mode} · ${s.phase.note}</div>
+        <div class="small">${s.phase.mode} · ${s.phase.note}${s.timer?.mode === 'double' ? ' · 60s continuous per block' : s.timer?.mode === 'single' ? ' · each block = 30s left + 30s right, with a half-way beep' : ' · each block = 30s grip A + 30s grip B, with a half-way beep'}</div>
         <div class="grid" style="margin-top:12px">
           <div class="exercise"><div class="name">${s.picks.rhythmic.name}</div><div class="meta">Rhythmic · Exercise A</div></div>
           <div class="exercise"><div class="name">${s.picks.ballistic.name}</div><div class="meta">Ballistic · Exercise B</div></div>
@@ -629,13 +641,18 @@
     saveState();
     stopTick();
     renderTimer();
-    await stageBeep();
+    const nextStage = t.stages[t.stageIndex];
+    if(nextStage?.cue === 'half') {
+      await halfBeep();
+    } else {
+      await stageBeep();
+    }
   }
 
   function resetTimerState(){
     const s = state.activeSession;
     if(!s?.timer) return;
-    if(s.type === 'Clubbell') s.timer = buildClubbellTimerState(s.phase.rounds);
+    if(s.type === 'Clubbell') s.timer = buildClubbellTimerState(s.phase);
     if(s.type === 'Mace') s.timer = buildMaceTimerState(s.phase.rounds);
     saveState();
     stopTick();
