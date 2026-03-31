@@ -55,6 +55,9 @@
   .timeline .item{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.03);color:var(--muted)}
   .timeline .item.active{background:var(--accent-soft);border-color:rgba(77,102,86,.22);color:var(--text)}
   .timeline .item.done{background:rgba(77,102,86,.08);border-color:rgba(77,102,86,.18);color:var(--text)}
+  .done-wrap{display:grid;place-items:center;text-align:center;gap:10px;min-height:220px}
+  .done-check{width:110px;height:110px;border-radius:999px;display:grid;place-items:center;background:rgba(77,102,86,.16);border:1px solid rgba(77,102,86,.28);font-size:3.5rem;font-weight:900;color:#dfeee2;box-shadow:0 18px 40px rgba(0,0,0,.22)}
+  .done-title{font-size:1.45rem;font-weight:900;letter-spacing:-.03em}
   .confetti{position:fixed;top:-10px;width:10px;height:16px;border-radius:2px;pointer-events:none;z-index:9999;animation:fall linear forwards}
   @keyframes fall{to{transform:translate3d(var(--tx),105vh,0) rotate(var(--rot));opacity:1}}
 </style>
@@ -75,10 +78,10 @@
   <section class="card" id="timerCard" style="display:none"></section>
 
   <section class="card actions">
-    <button class="btn secondary" id="newBtn">Open session</button>
+    <button class="btn secondary" id="newBtn">Next session</button>
     <button class="btn" id="finishBtn">Finish</button>
     <button class="btn danger" id="resetBtn">Reset</button>
-    <div class="small">The session stays on screen until you press Finish. After that, Triad automatically advances.</div>
+    <div class="small">The session stays on screen until you press Finish. After that, Triad returns to a neutral screen. Start the next day when you are ready.</div>
   </section>
 </div>
 
@@ -174,6 +177,17 @@
   ];
   const phaseByKey = (arr, key) => arr.find(x => x.key === key);
 
+  function getTodayKey(){
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2,'0');
+    const d = String(now.getDate()).padStart(2,'0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function isDoneToday(){
+    return state?.lastCompletedDate === getTodayKey();
+  }
 
   function getReadinessScore(){
     const message = [
@@ -337,6 +351,7 @@
       waveIndex: 0,
       completedSessions: 0,
       kbWeight: 16,
+      lastCompletedDate: null,
       bags: {
         clubbell: {
           rhythmic: { bag: [], last: null },
@@ -512,10 +527,18 @@
     const readinessHtml = s ? `<div class="small" style="margin:0 0 12px">Readiness: <strong style="color:var(--text)">${s.readinessScore ?? 3}/5</strong>${s.adjusted ? ` · ${s.adjustedReason}` : ' · Run as planned'}</div>` : '';
 
     if(!s){
-      sessionCard.innerHTML = `<div class="section-title">Ready</div><div class="small">Open the next session. You will get a 1–5 readiness check before the session appears.</div>`;
+      const doneToday = isDoneToday();
+      finishBtn.style.display = 'none';
+      newBtn.textContent = 'Next session';
+      sessionCard.innerHTML = doneToday
+        ? `<div class="done-wrap"><div class="done-check">✓</div><div class="done-title">Today is done</div><div class="small">Press Next session when you are ready.</div></div>`
+        : `<div class="section-title">Ready</div><div class="small">Press Next session when you are ready. You will get a 1–5 readiness check before the session appears.</div>`;
       renderTimer();
       return;
     }
+
+    finishBtn.style.display = 'block';
+    newBtn.textContent = 'Next session';
 
     if(s.type === 'Kettlebell'){
       const cards = [
@@ -767,12 +790,12 @@
     await finishBeep();
     advanceInternalPhase(finishedType);
     state.activeSession = null;
+    state.lastCompletedDate = getTodayKey();
     state.completedSessions = (Number.isFinite(state.completedSessions) ? state.completedSessions : 0) + 1;
     state.nextSessionIndex = (state.nextSessionIndex + 1) % SESSION_TYPES.length;
 
     if(shouldOfferCycleDecision()) handleCycleDecision();
 
-    ensureSession();
     saveState();
     renderSession();
   }
@@ -791,7 +814,6 @@
   finishBtn.addEventListener('click', finishSession);
   resetBtn.addEventListener('click', fullReset);
 
-  ensureSession();
   renderSession();
 })();
 </script>
