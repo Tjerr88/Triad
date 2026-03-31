@@ -287,6 +287,31 @@
 
   let tick = null;
   let audioCtx = null;
+  let wakeLock = null;
+
+  async function requestWakeLock(){
+    try{
+      if('wakeLock' in navigator && !wakeLock){
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      }
+    }catch(e){}
+  }
+
+  async function releaseWakeLock(){
+    try{
+      if(wakeLock){
+        await wakeLock.release();
+        wakeLock = null;
+      }
+    }catch(e){}
+  }
+
+  document.addEventListener('visibilitychange', async () => {
+    if(document.visibilityState === 'visible' && state?.activeSession?.timer?.isRunning){
+      await requestWakeLock();
+    }
+  });
 
   function shuffle(arr){
     const a = arr.slice();
@@ -335,7 +360,7 @@
           s.timer = null;
         }
         if(s.type === 'Clubbell' && s.phase){
-          s.timer = buildClubbellTimerState(s.phase);
+          s.timer = buildClubbellTimerState(s.phase.rounds, CLUB_MODE_BY_STEP[s.phase.label] || 'single');
         }
         if(s.type === 'Mace' && s.phase){
           s.timer = buildMaceTimerState(s.phase.rounds);
@@ -382,26 +407,16 @@
     return picked;
   }
 
-  function buildClubbellTimerState(phase){
-    const rounds = phase.rounds;
-    const mode = CLUB_MODE_BY_STEP[phase.label] || 'single';
+  function buildClubbellTimerState(rounds, mode='single'){
     const stages = [];
-    const splitStage = (label) => {
-      if(mode === 'double') return [{ label, seconds: 60 }];
-      const firstHalf = mode === 'single' ? `${label} · 30s Left / Side A` : `${label} · 30s Grip A`;
-      const secondHalf = mode === 'single' ? `${label} · 30s Right / Side B` : `${label} · 30s Grip B`;
-      return [
-        { label: firstHalf, seconds: 30 },
-        { label: secondHalf, seconds: 30, cue: 'half' }
-      ];
-    };
+    const splitMode = mode === 'single' || mode === '2h';
     for(let round=1; round<=rounds; round++){
-      stages.push(...splitStage(`Round ${round} · A`));
-      stages.push(...splitStage(`Round ${round} · B`));
-      stages.push(...splitStage(`Round ${round} · C`));
-      if(round < rounds) stages.push({ label: `Rest after round ${round}`, seconds: 60 });
+      stages.push({ label: `Round ${round} · A`, seconds: 60, split: splitMode, halfCueAt: splitMode ? 30 : null });
+      stages.push({ label: `Round ${round} · B`, seconds: 60, split: splitMode, halfCueAt: splitMode ? 30 : null });
+      stages.push({ label: `Round ${round} · C`, seconds: 60, split: splitMode, halfCueAt: splitMode ? 30 : null });
+      if(round < rounds) stages.push({ label: `Rest after round ${round}`, seconds: 60, split: false, halfCueAt: null });
     }
-    return { stages, stageIndex: 0, stageLeft: stages[0].seconds, isRunning:false, mode };
+    return { stages, stageIndex: 0, stageLeft: stages[0].seconds, isRunning:false, halfCuePlayed:false, mode };
   }
 
 
@@ -440,7 +455,7 @@
         ballistic: pickClubbellByMode(state.bags.clubbell.ballistic, CLUBBELL.ballistic, mode),
         grinds: pickClubbellByMode(state.bags.clubbell.grinds, CLUBBELL.grinds, mode)
       };
-      return { typeIndex, type, phase, picks, timer: buildClubbellTimerState(phase) };
+      return { typeIndex, type, phase, picks, timer: buildClubbellTimerState(phase.rounds) };
     }
 
     if(type === 'Mace'){
@@ -475,7 +490,7 @@
     }catch(e){}
   }
   async function stageBeep(){ await beep(860,.12,.07); setTimeout(()=>beep(1140,.14,.07),140); }
-  async function halfBeep(){ await beep(1240,.18,.11); setTimeout(()=>beep(1560,.22,.11),170); }
+  async function halfBeep(){ await beep(1320,.18,.09); setTimeout(()=>beep(1320,.18,.09),170); }
   async function finishBeep(){ await beep(860,.12,.07); setTimeout(()=>beep(1140,.12,.07),140); setTimeout(()=>beep(1460,.18,.08),280); }
 
   function renderSession(){
@@ -515,9 +530,15 @@
     }
 
     if(s.type === 'Clubbell'){
+      const mode = CLUB_MODE_BY_STEP[s.phase.label] || 'single';
+      const timerNote = mode === 'double'
+        ? 'Each work block runs 60s continuously.'
+        : mode === 'single'
+          ? 'Each work block runs 30s left + 30s right with a half-way beep.'
+          : 'Each work block runs 30s grip A + 30s grip B with a half-way beep.';
       sessionCard.innerHTML = `
-        <div class="section-title">Clubbell — ${s.phase.label}</div>
-        <div class="small">${s.phase.mode} · ${s.phase.note}${s.timer?.mode === 'double' ? ' · 60s continuous per block' : s.timer?.mode === 'single' ? ' · each block = 30s left + 30s right, with a half-way beep' : ' · each block = 30s grip A + 30s grip B, with a half-way beep'}</div>
+        ${readinessHtml}<div class="section-title">Clubbell — ${s.phase.label}</div>
+        <div class="small">${s.phase.mode} · ${s.phase.note}<br>${timerNote}</div>
         <div class="grid" style="margin-top:12px">
           <div class="exercise"><div class="name">${s.picks.rhythmic.name}</div><div class="meta">Rhythmic · Exercise A</div></div>
           <div class="exercise"><div class="name">${s.picks.ballistic.name}</div><div class="meta">Ballistic · Exercise B</div></div>
@@ -529,7 +550,7 @@
 
     if(s.type === 'Mace'){
       sessionCard.innerHTML = `
-        <div class="section-title">Mace — ${s.phase.label}</div>
+        ${readinessHtml}<div class="section-title">Mace — ${s.phase.label}</div>
         <div class="small">${s.phase.note}</div>
         <div class="exercise" style="margin-top:12px"><div class="name">${s.picks.flow}</div><div class="meta">Mace flow</div></div>`;
       renderTimer();
@@ -599,7 +620,13 @@
     s.timer.isRunning = !s.timer.isRunning;
     saveState();
     renderTimer();
-    if(s.timer.isRunning) startTick(); else stopTick();
+    if(s.timer.isRunning){
+      await requestWakeLock();
+      startTick();
+    } else {
+      stopTick();
+      await releaseWakeLock();
+    }
   }
 
   function stopTick(){ if(tick) clearInterval(tick); tick = null; }
@@ -610,12 +637,19 @@
       const s = state.activeSession;
       if(!s?.timer?.isRunning) return;
       const t = s.timer;
+      const currentStage = t.stages[t.stageIndex];
       if(t.stageLeft > 0) t.stageLeft -= 1;
-      if(t.stageLeft <= 0){
-        t.isRunning = false;
+      if(currentStage?.split && currentStage.halfCueAt && !t.halfCuePlayed && t.stageLeft === currentStage.halfCueAt){
+        t.halfCuePlayed = true;
         saveState();
         renderTimer();
-        await advanceStage();
+        await halfBeep();
+        return;
+      }
+      if(t.stageLeft <= 0){
+        saveState();
+        renderTimer();
+        await advanceStage(true);
         return;
       }
       saveState();
@@ -623,39 +657,44 @@
     }, 1000);
   }
 
-  async function advanceStage(){
+  async function advanceStage(autoContinue = false){
     const s = state.activeSession;
     if(!s?.timer) return;
     const t = s.timer;
     if(t.stageIndex >= t.stages.length - 1){
       t.isRunning = false;
+      t.halfCuePlayed = false;
       saveState();
       stopTick();
+      await releaseWakeLock();
       renderTimer();
       await finishBeep();
       return;
     }
     t.stageIndex += 1;
     t.stageLeft = t.stages[t.stageIndex].seconds || 0;
-    t.isRunning = false;
+    t.halfCuePlayed = false;
+    t.isRunning = autoContinue && !t.manual;
     saveState();
     stopTick();
-    renderTimer();
-    const nextStage = t.stages[t.stageIndex];
-    if(nextStage?.cue === 'half') {
-      await halfBeep();
+    if(t.isRunning){
+      await requestWakeLock();
+      startTick();
     } else {
-      await stageBeep();
+      await releaseWakeLock();
     }
+    renderTimer();
+    await stageBeep();
   }
 
-  function resetTimerState(){
+  async function resetTimerState(){
     const s = state.activeSession;
     if(!s?.timer) return;
-    if(s.type === 'Clubbell') s.timer = buildClubbellTimerState(s.phase);
+    if(s.type === 'Clubbell') s.timer = buildClubbellTimerState(s.phase.rounds, CLUB_MODE_BY_STEP[s.phase.label] || 'single');
     if(s.type === 'Mace') s.timer = buildMaceTimerState(s.phase.rounds);
     saveState();
     stopTick();
+    await releaseWakeLock();
     renderTimer();
   }
 
@@ -715,6 +754,7 @@
     if(!state.activeSession) return;
     const finishedType = state.activeSession.type;
     stopTick();
+    await releaseWakeLock();
     confetti();
     await finishBeep();
     advanceInternalPhase(finishedType);
@@ -732,6 +772,7 @@
   function fullReset(){
     if(!confirm('Reset everything?')) return;
     stopTick();
+    releaseWakeLock();
     state = defaultState();
     saveState();
     renderSession();
