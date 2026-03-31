@@ -84,7 +84,7 @@
 
 <script>
 (() => {
-  const STORAGE_KEY = 'triad-generator-v26';
+  const STORAGE_KEY = 'triad-generator-v27';
   const SESSION_TYPES = ['Kettlebell','Clubbell','Mace','Active Recovery'];
 
 
@@ -410,13 +410,20 @@
   function buildClubbellTimerState(rounds, mode='single'){
     const stages = [];
     const splitMode = mode === 'single' || mode === '2h';
+    const firstLabel = mode === 'single' ? 'Left' : mode === '2h' ? 'Grip A' : null;
+    const secondLabel = mode === 'single' ? 'Right' : mode === '2h' ? 'Grip B' : null;
     for(let round=1; round<=rounds; round++){
-      stages.push({ label: `Round ${round} · A`, seconds: 60, split: splitMode, halfCueAt: splitMode ? 30 : null });
-      stages.push({ label: `Round ${round} · B`, seconds: 60, split: splitMode, halfCueAt: splitMode ? 30 : null });
-      stages.push({ label: `Round ${round} · C`, seconds: 60, split: splitMode, halfCueAt: splitMode ? 30 : null });
-      if(round < rounds) stages.push({ label: `Rest after round ${round}`, seconds: 60, split: false, halfCueAt: null });
+      ['A','B','C'].forEach(letter => {
+        if(splitMode){
+          stages.push({ label: `Round ${round} · ${letter} · ${firstLabel}`, seconds: 30, splitPart:true });
+          stages.push({ label: `Round ${round} · ${letter} · ${secondLabel}`, seconds: 30, splitPart:true });
+        } else {
+          stages.push({ label: `Round ${round} · ${letter}`, seconds: 60, splitPart:false });
+        }
+      });
+      if(round < rounds) stages.push({ label: `Rest after round ${round}`, seconds: 60, splitPart:false, isRest:true });
     }
-    return { stages, stageIndex: 0, stageLeft: stages[0].seconds, isRunning:false, halfCuePlayed:false, mode };
+    return { stages, stageIndex: 0, stageLeft: stages[0].seconds, isRunning:false, mode };
   }
 
 
@@ -685,6 +692,7 @@
     }
     renderTimer();
     await stageBeep();
+    if(t.isRunning) startTick();
   }
 
   async function resetTimerState(){
