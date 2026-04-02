@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Triad 3.2</title>
+<title>Triad 3.3</title>
 <style>
   :root{
     --bg:#0b0f14;
@@ -65,7 +65,7 @@
 <body>
 <div class="app">
   <section class="card top">
-    <h1>Triad</h1>
+    <h1 id="appTitle">Triad</h1>
     <div class="sub">Kettlebell · Clubbell · Mace · Active Recovery · 3-step mini-wave</div>
     <div class="row">
       <span class="pill">Position: <strong id="sessionCode">C1 · M1 · S1</strong></span>
@@ -87,8 +87,28 @@
 
 <script>
 (() => {
-  const STORAGE_KEY = 'triad-generator-v27';
+  const STORAGE_KEY = 'triad-generator-v33';
   const SESSION_TYPES = ['Kettlebell','Clubbell','Mace','Active Recovery'];
+  const RECOVERY_MODES = {
+    gate: { key:'gate', label:'Gate recovery' },
+    cycle4: { key:'cycle4', label:'4 day cycle' },
+    cycle6: { key:'cycle6', label:'6 day cycle' }
+  };
+
+  function getRotationForMode(mode){
+    if(mode === 'cycle4') return ['Kettlebell','Clubbell','Mace','Active Recovery'];
+    if(mode === 'cycle6') return ['Kettlebell','Active Recovery','Clubbell','Active Recovery','Mace','Active Recovery'];
+    return ['Kettlebell','Clubbell','Mace'];
+  }
+
+  function getRotationLength(mode){
+    return getRotationForMode(mode).length;
+  }
+
+  function getPlannedSessionType(stepIndex, mode){
+    const rotation = getRotationForMode(mode);
+    return rotation[((Number.isFinite(stepIndex) ? stepIndex : 0) % rotation.length + rotation.length) % rotation.length];
+  }
 
 
   const CLUBBELL = {
@@ -154,9 +174,9 @@
   };
 
   const KB_PHASES = [
-    { key:'low', label:'Low', bell:'-1 bell', reps:'8–12 reps', note:'3 sets across the Big Six' },
-    { key:'medium', label:'Medium', bell:'normal bell', reps:'6–8 reps', note:'3 sets across the Big Six' },
-    { key:'high', label:'High', bell:'+1 bell', reps:'3–5 reps', note:'3 sets across the Big Six' }
+    { key:'low', label:'Low', bell:'-1 bell', reps:'12–15 zone', note:'Other 5 lifts: 3 sets of 12–15 · Get-Up: 1×2+2' },
+    { key:'medium', label:'Medium', bell:'normal bell', reps:'8–11 zone', note:'Other 5 lifts: 3 sets of 8–11 · Get-Up: 3×1 full get-up' },
+    { key:'high', label:'High', bell:'+1 bell', reps:'4–7 zone', note:'Other 5 lifts: 3 sets of 4–7 · Get-Up Sit-Up: 3×4–7' }
   ];
   const CB_PHASES = [
     { key:'low', label:'Low', mode:'Single Club focus', rounds:3, note:'3 rounds' },
@@ -290,6 +310,7 @@
     return { ...session, readinessScore: session.readinessScore, adjusted:false };
   }
 
+  const appTitleEl = document.getElementById('appTitle');
   const sessionCodeEl = document.getElementById('sessionCode');
   const sessionTypeEl = document.getElementById('sessionType');
   const sessionFocusEl = document.getElementById('sessionFocus');
@@ -352,6 +373,7 @@
       completedSessions: 0,
       kbWeight: 16,
       lastCompletedDate: null,
+      recoveryMode: 'gate',
       bags: {
         clubbell: {
           rhythmic: { bag: [], last: null },
@@ -369,6 +391,8 @@
     try{
       const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
       const loaded = raw ? { ...defaultState(), ...raw } : defaultState();
+      if(!loaded.recoveryMode || !RECOVERY_MODES[loaded.recoveryMode]) loaded.recoveryMode = 'gate';
+      loaded.nextSessionIndex = ((Number.isFinite(loaded.nextSessionIndex) ? loaded.nextSessionIndex : 0) % getRotationLength(loaded.recoveryMode) + getRotationLength(loaded.recoveryMode)) % getRotationLength(loaded.recoveryMode);
       if(loaded.activeSession){
         const s = loaded.activeSession;
         if(s.type === 'Kettlebell'){
@@ -452,7 +476,7 @@
   }
 
   function createSession(typeIndex, forcedPhaseKey = null){
-    const type = SESSION_TYPES[typeIndex];
+    const type = typeof typeIndex === 'string' ? typeIndex : getPlannedSessionType(typeIndex, state.recoveryMode);
 
     if(type === 'Kettlebell'){
       const wave = WAVE_PLANS[state.waveIndex % WAVE_PLANS.length];
@@ -477,7 +501,7 @@
         ballistic: pickClubbellByMode(state.bags.clubbell.ballistic, CLUBBELL.ballistic, mode),
         grinds: pickClubbellByMode(state.bags.clubbell.grinds, CLUBBELL.grinds, mode)
       };
-      return { typeIndex, type, phase, picks, timer: buildClubbellTimerState(phase.rounds) };
+      return { typeIndex, type, phase, picks, timer: buildClubbellTimerState(phase.rounds, mode) };
     }
 
     if(type === 'Mace'){
@@ -522,9 +546,9 @@
     const mini = Math.floor((completed % 12) / 4) + 1;
     const session = (completed % 4) + 1;
     sessionCodeEl.textContent = `C${cycle} · M${mini} · S${session}`;
-    sessionTypeEl.textContent = s ? s.type : SESSION_TYPES[state.nextSessionIndex];
+    sessionTypeEl.textContent = s ? s.type : getPlannedSessionType(state.nextSessionIndex, state.recoveryMode);
     sessionFocusEl.textContent = s?.phase?.label || 'Active Recovery';
-    const readinessHtml = s ? `<div class="small" style="margin:0 0 12px">Readiness: <strong style="color:var(--text)">${s.readinessScore ?? 3}/5</strong>${s.adjusted ? ` · ${s.adjustedReason}` : ' · Run as planned'}</div>` : '';
+    const readinessHtml = s ? `<div class="small" style="margin:0 0 12px">Readiness: <strong style="color:var(--text)">${s.readinessScore ?? '—'}${s.readinessScore != null ? '/5' : ''}</strong>${s.readinessScore == null ? '' : (s.adjusted ? ` · ${s.adjustedReason}` : ' · Run as planned')}</div>` : '';
 
     if(!s){
       const doneToday = isDoneToday();
@@ -551,7 +575,7 @@
       ];
       sessionCard.innerHTML = `
         ${readinessHtml}<div class="section-title">Kettlebell — ${s.phase.label}</div>
-        <div class="small">${s.phase.bell} · ${s.phase.reps} · 3 sets of the Big Six</div>
+        <div class="small">${s.phase.bell} · ${s.phase.reps}<br>${s.phase.note}</div>
         <div class="grid grid-2" style="margin-top:12px">
           ${cards.map(([label,name]) => `<div class="exercise"><div class="name">${name}</div><div class="meta">${label}</div></div>`).join('')}
         </div>`;
@@ -589,7 +613,7 @@
 
     sessionCard.innerHTML = `
       ${readinessHtml}<div class="section-title">Active Recovery</div>
-      <div class="small">Rustig bewegen. Geen timer nodig.</div>
+      <div class="small">Rustig bewegen. Geen timer nodig.${(s.readinessScore ?? 0) >= 4 ? '<br><strong style="color:var(--text)">Optional: Zone 2 · 30–45 minutes</strong>' : ''}</div>
       <div class="grid" style="margin-top:12px">
         <div class="exercise"><div class="name">Hips</div><div class="meta">${s.picks.hips.join(' • ')}</div></div>
         <div class="exercise"><div class="name">Shoulders</div><div class="meta">${s.picks.shoulders.join(' • ')}</div></div>
@@ -632,8 +656,10 @@
 
   function ensureSession(){
     if(state.activeSession) return;
-    const readinessScore = getReadinessScore();
+    const plannedType = getPlannedSessionType(state.nextSessionIndex, state.recoveryMode);
     let session = createSession(state.nextSessionIndex);
+
+    const readinessScore = getReadinessScore();
     session.readinessScore = readinessScore;
     session.plannedType = session.type;
     session.plannedPhase = session.phase || null;
@@ -745,7 +771,7 @@
   }
 
   function advanceInternalPhase(type){
-    if(type === 'Active Recovery'){
+    if(type === 'Mace'){
       state.waveIndex = (state.waveIndex + 1) % WAVE_PLANS.length;
     }
   }
@@ -792,7 +818,7 @@
     state.activeSession = null;
     state.lastCompletedDate = getTodayKey();
     state.completedSessions = (Number.isFinite(state.completedSessions) ? state.completedSessions : 0) + 1;
-    state.nextSessionIndex = (state.nextSessionIndex + 1) % SESSION_TYPES.length;
+    state.nextSessionIndex = (state.nextSessionIndex + 1) % getRotationLength(state.recoveryMode);
 
     if(shouldOfferCycleDecision()) handleCycleDecision();
 
@@ -809,7 +835,58 @@
     renderSession();
   }
 
+  function openRecoveryModePicker(){
+    const currentLabel = RECOVERY_MODES[state.recoveryMode]?.label || RECOVERY_MODES.gate.label;
+    const entered = window.prompt([
+      'Recovery mode',
+      '',
+      `Current: ${currentLabel}`,
+      '',
+      '1 = Gate recovery',
+      '2 = 4 day cycle',
+      '3 = 6 day cycle'
+    ].join('\n'), state.recoveryMode === 'gate' ? '1' : state.recoveryMode === 'cycle4' ? '2' : '3');
+
+    if(entered === null) return;
+
+    const trimmed = String(entered).trim().toLowerCase();
+    const nextMode = trimmed in {'1':1,'gate':1,'gate recovery':1} ? 'gate'
+      : trimmed in {'2':1,'4':1,'4 day':1,'4-day':1,'4 day cycle':1,'cycle4':1} ? 'cycle4'
+      : trimmed in {'3':1,'6':1,'6 day':1,'6-day':1,'6 day cycle':1,'cycle6':1} ? 'cycle6'
+      : null;
+
+    if(!nextMode || nextMode === state.recoveryMode) return;
+
+    state.recoveryMode = nextMode;
+    state.nextSessionIndex = 0;
+    state.activeSession = null;
+    saveState();
+    renderSession();
+    window.alert(`Recovery mode set to ${RECOVERY_MODES[nextMode].label}.`);
+  }
+
+  function attachHiddenModeTrigger(){
+    if(!appTitleEl) return;
+    let pressTimer = null;
+    const clearPress = () => {
+      if(pressTimer){
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+    };
+    const startPress = (event) => {
+      clearPress();
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        openRecoveryModePicker();
+      }, 8000);
+    };
+    ['mousedown','touchstart','pointerdown'].forEach(evt => appTitleEl.addEventListener(evt, startPress, { passive:true }));
+    ['mouseup','mouseleave','touchend','touchcancel','pointerup','pointercancel'].forEach(evt => appTitleEl.addEventListener(evt, clearPress, { passive:true }));
+  }
+
   let state = loadState();
+  attachHiddenModeTrigger();
   newBtn.addEventListener('click', () => { ensureSession(); renderSession(); });
   finishBtn.addEventListener('click', finishSession);
   resetBtn.addEventListener('click', fullReset);
