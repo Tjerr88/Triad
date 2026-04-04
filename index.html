@@ -30,7 +30,7 @@
   .app{max-width:820px;margin:0 auto;display:grid;gap:16px;padding-bottom:48px}
   .card{background:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
   .top{display:grid;gap:12px;background:linear-gradient(135deg, rgba(255,255,255,.03), rgba(255,255,255,.01));}
-  h1{margin:0;font-size:2.6rem;line-height:.92;letter-spacing:-.05em}
+  h1{margin:0;font-size:2.6rem;line-height:.92;letter-spacing:-.05em;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;cursor:pointer}
   .sub{color:var(--muted);line-height:1.45;font-size:.98rem}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted);font-size:.9rem;font-weight:700}
@@ -66,7 +66,7 @@
 <div class="app">
   <section class="card top">
     <h1 id="appTitle">Triad</h1>
-    <div class="sub">Kettlebell · Clubbell · Mace · Active Recovery · 3-step mini-wave</div>
+    <div class="sub">Kettlebell · Clubbell · Mace · Active Recovery · Hypertrophy wave</div>
     <div class="row">
       <span class="pill">Position: <strong id="sessionCode">C1 · M1 · S1</strong></span>
       <span class="pill">Type: <strong id="sessionType">—</strong></span>
@@ -81,23 +81,26 @@
     <button class="btn secondary" id="newBtn">Next session</button>
     <button class="btn" id="finishBtn">Finish</button>
     <button class="btn danger" id="resetBtn">Reset</button>
+    <button class="btn secondary" id="modeBtn">Mode</button>
     <div class="small">The session stays on screen until you press Finish. After that, Triad returns to a neutral screen. Start the next day when you are ready.</div>
   </section>
 </div>
 
 <script>
 (() => {
-  const STORAGE_KEY = 'triad-generator-v33';
+  const STORAGE_KEY = 'triad-generator-v36';
   const SESSION_TYPES = ['Kettlebell','Clubbell','Mace','Active Recovery'];
   const RECOVERY_MODES = {
     gate: { key:'gate', label:'Gate recovery' },
     cycle4: { key:'cycle4', label:'4 day cycle' },
-    cycle6: { key:'cycle6', label:'6 day cycle' }
+    cycle6: { key:'cycle6', label:'6 day cycle' },
+    hypertrophy: { key:'hypertrophy', label:'Hypertrophy wave' }
   };
 
   function getRotationForMode(mode){
     if(mode === 'cycle4') return ['Kettlebell','Clubbell','Mace','Active Recovery'];
     if(mode === 'cycle6') return ['Kettlebell','Active Recovery','Clubbell','Active Recovery','Mace','Active Recovery'];
+    if(mode === 'hypertrophy') return ['Hypertrophy','Hypertrophy','Active Recovery','Hypertrophy','Hypertrophy','Active Recovery','Hypertrophy','Hypertrophy','Active Recovery'];
     return ['Kettlebell','Clubbell','Mace'];
   }
 
@@ -195,7 +198,53 @@
     { kb:'low', cb:'medium', mb:'high' },
     { kb:'medium', cb:'high', mb:'low' }
   ];
+  const HYPERTROPHY_PLANS = [
+    { type:'Kettlebell', key:'high' },
+    { type:'Clubbell', key:'low' },
+    { type:'Kettlebell', key:'low' },
+    { type:'Mace', key:'high' },
+    { type:'Kettlebell', key:'medium' },
+    { type:'Clubbell', key:'medium' },
+    { type:'Kettlebell', key:'high' },
+    { type:'Mace', key:'low' },
+    { type:'Kettlebell', key:'low' },
+    { type:'Clubbell', key:'high' },
+    { type:'Kettlebell', key:'medium' },
+    { type:'Mace', key:'medium' }
+  ];
   const phaseByKey = (arr, key) => arr.find(x => x.key === key);
+
+  function getKbPhaseCards(phase, picks){
+    const getUpName = phase.key === 'high'
+      ? 'Get-Up Sit-Up'
+      : phase.key === 'medium'
+        ? 'Full Get-Up'
+        : 'Get-Up';
+    const getUpReps = phase.key === 'high'
+      ? '3 × 4–7'
+      : phase.key === 'medium'
+        ? '3 × 1'
+        : '1 × 2+2';
+    const zoneReps = phase.key === 'high'
+      ? '3 × 4–7'
+      : phase.key === 'medium'
+        ? '3 × 8–11'
+        : '3 × 12–15';
+    return [
+      [getUpName, getUpReps],
+      [picks.swing, zoneReps],
+      [picks.press, zoneReps],
+      [picks.clean, zoneReps],
+      [picks.squat, zoneReps],
+      [picks.snatch, zoneReps]
+    ];
+  }
+
+  function downgradePhaseKey(key){
+    if(key === 'high') return 'medium';
+    if(key === 'medium') return 'low';
+    return null;
+  }
 
   function getTodayKey(){
     const now = new Date();
@@ -231,6 +280,30 @@
   function downgradeSession(session){
     if(!session || session.type === 'Active Recovery'){
       return { ...session, readinessScore: session?.readinessScore ?? 3, adjusted:false };
+    }
+
+    if(session.type === 'Hypertrophy'){
+      const nextKey = downgradePhaseKey(session.phase?.key);
+      if(!nextKey){
+        return {
+          typeIndex: session.typeIndex,
+          type: 'Active Recovery',
+          picks: ACTIVE_RECOVERY,
+          timer: null,
+          plannedType: 'Hypertrophy',
+          plannedPhase: null,
+          readinessScore: session.readinessScore,
+          adjusted: true,
+          adjustedReason: 'Low hypertrophy day downgraded to Active Recovery'
+        };
+      }
+      const downgraded = createSession(session.typeIndex, nextKey);
+      downgraded.plannedType = session.type;
+      downgraded.plannedPhase = session.phase;
+      downgraded.readinessScore = session.readinessScore;
+      downgraded.adjusted = true;
+      downgraded.adjustedReason = `${session.planType} ${session.phase.label} downgraded to ${downgraded.phase.label}`;
+      return downgraded;
     }
 
     const plannedPhase = session.phase;
@@ -319,6 +392,7 @@
   const newBtn = document.getElementById('newBtn');
   const finishBtn = document.getElementById('finishBtn');
   const resetBtn = document.getElementById('resetBtn');
+  const modeBtn = document.getElementById('modeBtn');
 
   let tick = null;
   let audioCtx = null;
@@ -370,6 +444,7 @@
       nextSessionIndex: 0,
       activeSession: null,
       waveIndex: 0,
+      hypertrophyIndex: 0,
       completedSessions: 0,
       kbWeight: 16,
       lastCompletedDate: null,
@@ -406,6 +481,15 @@
         }
         if(s.type === 'Active Recovery'){
           s.timer = null;
+        }
+        if(s.type === 'Hypertrophy'){
+          if(s.planType === 'Clubbell' && s.phase){
+            s.timer = buildClubbellTimerState(s.phase.rounds, CLUB_MODE_BY_STEP[s.phase.label] || 'single');
+          } else if(s.planType === 'Mace' && s.phase){
+            s.timer = buildMaceTimerState(s.phase.rounds);
+          } else {
+            s.timer = null;
+          }
         }
       }
       return loaded;
@@ -511,6 +595,38 @@
       return { typeIndex, type, phase, picks:{ flow }, timer: buildMaceTimerState(phase.rounds) };
     }
 
+    if(type === 'Hypertrophy'){
+      const plan = HYPERTROPHY_PLANS[state.hypertrophyIndex % HYPERTROPHY_PLANS.length];
+
+      if(plan.type === 'Kettlebell'){
+        const phase = phaseByKey(KB_PHASES, forcedPhaseKey || plan.key);
+        const picks = {
+          getUp: 'Get Up',
+          swing: 'One-Arm Swing',
+          press: 'Military Press',
+          clean: 'Double Clean',
+          squat: 'Double Front Squat',
+          snatch: 'Snatch'
+        };
+        return { typeIndex, type, planType:'Kettlebell', phase, picks, timer: null };
+      }
+
+      if(plan.type === 'Clubbell'){
+        const phase = phaseByKey(CB_PHASES, forcedPhaseKey || plan.key);
+        const mode = CLUB_MODE_BY_STEP[phase.label] || 'single';
+        const picks = {
+          rhythmic: pickClubbellByMode(state.bags.clubbell.rhythmic, CLUBBELL.rhythmic, mode),
+          ballistic: pickClubbellByMode(state.bags.clubbell.ballistic, CLUBBELL.ballistic, mode),
+          grinds: pickClubbellByMode(state.bags.clubbell.grinds, CLUBBELL.grinds, mode)
+        };
+        return { typeIndex, type, planType:'Clubbell', phase, picks, timer: buildClubbellTimerState(phase.rounds, mode) };
+      }
+
+      const phase = phaseByKey(MB_PHASES, forcedPhaseKey || plan.key);
+      const flow = pickFromBucket(state.bags.mace.flow, MACE_FLOWS);
+      return { typeIndex, type, planType:'Mace', phase, picks:{ flow }, timer: buildMaceTimerState(phase.rounds) };
+    }
+
     return { typeIndex, type, picks: ACTIVE_RECOVERY };
   }
 
@@ -542,12 +658,25 @@
   function renderSession(){
     const s = state.activeSession;
     const completed = Number.isFinite(state.completedSessions) ? state.completedSessions : 0;
-    const cycle = Math.floor(completed / 12) + 1;
-    const mini = Math.floor((completed % 12) / 4) + 1;
-    const session = (completed % 4) + 1;
-    sessionCodeEl.textContent = `C${cycle} · M${mini} · S${session}`;
-    sessionTypeEl.textContent = s ? s.type : getPlannedSessionType(state.nextSessionIndex, state.recoveryMode);
-    sessionFocusEl.textContent = s?.phase?.label || 'Active Recovery';
+
+    if(state.recoveryMode === 'hypertrophy'){
+      const block = Math.floor(completed / 5) + 1;
+      const day = (completed % 5) + 1;
+      sessionCodeEl.textContent = `H${block} · Session #${day}`;
+    } else {
+      const cycle = Math.floor(completed / 12) + 1;
+      const mini = Math.floor((completed % 12) / 4) + 1;
+      const session = (completed % 4) + 1;
+      sessionCodeEl.textContent = `C${cycle} · M${mini} · S${session}`;
+    }
+
+    sessionTypeEl.textContent = s ? (s.type === 'Hypertrophy' ? s.planType : s.type) : getPlannedSessionType(state.nextSessionIndex, state.recoveryMode);
+    if(s?.type === 'Hypertrophy'){
+      const shortType = s.planType === 'Kettlebell' ? 'KB' : s.planType === 'Clubbell' ? 'CB' : 'MB';
+      sessionFocusEl.textContent = `${shortType} ${s.phase.label}`;
+    } else {
+      sessionFocusEl.textContent = s?.phase?.label || 'Active Recovery';
+    }
     const readinessHtml = s ? `<div class="small" style="margin:0 0 12px">Readiness: <strong style="color:var(--text)">${s.readinessScore ?? '—'}${s.readinessScore != null ? '/5' : ''}</strong>${s.readinessScore == null ? '' : (s.adjusted ? ` · ${s.adjustedReason}` : ' · Run as planned')}</div>` : '';
 
     if(!s){
@@ -565,19 +694,12 @@
     newBtn.textContent = 'Next session';
 
     if(s.type === 'Kettlebell'){
-      const cards = [
-        ['Get Up', s.picks.getUp],
-        ['One-Arm Swing', s.picks.swing],
-        ['Military Press', s.picks.press],
-        ['Double Clean', s.picks.clean],
-        ['Double Front Squat', s.picks.squat],
-        ['Snatch', s.picks.snatch]
-      ];
+      const cards = getKbPhaseCards(s.phase, s.picks);
       sessionCard.innerHTML = `
         ${readinessHtml}<div class="section-title">Kettlebell — ${s.phase.label}</div>
-        <div class="small">${s.phase.bell} · ${s.phase.reps}<br>${s.phase.note}</div>
+        <div class="small">${s.phase.bell} · ${s.phase.reps}</div>
         <div class="grid grid-2" style="margin-top:12px">
-          ${cards.map(([label,name]) => `<div class="exercise"><div class="name">${name}</div><div class="meta">${label}</div></div>`).join('')}
+          ${cards.map(([name,reps]) => `<div class="exercise"><div class="name">${name}</div><div class="meta">${reps}</div></div>`).join('')}
         </div>`;
       renderTimer();
       return;
@@ -605,6 +727,57 @@
     if(s.type === 'Mace'){
       sessionCard.innerHTML = `
         ${readinessHtml}<div class="section-title">Mace — ${s.phase.label}</div>
+        <div class="small">${s.phase.note}</div>
+        <div class="exercise" style="margin-top:12px"><div class="name">${s.picks.flow}</div><div class="meta">Mace flow</div></div>`;
+      renderTimer();
+      return;
+    }
+
+    if(s.type === 'Hypertrophy'){
+      const intro = `2 training sessions, then 1 Active Recovery day. The content rotation keeps running, with Kettlebell 2:1 versus Clubbell and Mace.`;
+
+      if(s.planType === 'Kettlebell'){
+        const kbCards = getKbPhaseCards(s.phase, s.picks);
+        sessionCard.innerHTML = `
+          ${readinessHtml}
+          <div class="section-title">Hypertrophy wave</div>
+          <div class="small">${intro}</div>
+          <div class="section-title" style="margin-top:16px">Kettlebell — ${s.phase.label}</div>
+          <div class="small">${s.phase.bell} · ${s.phase.reps}</div>
+          <div class="grid grid-2" style="margin-top:12px">
+            ${kbCards.map(([name,reps]) => `<div class="exercise"><div class="name">${name}</div><div class="meta">${reps}</div></div>`).join('')}
+          </div>`;
+        renderTimer();
+        return;
+      }
+
+      if(s.planType === 'Clubbell'){
+        const mode = CLUB_MODE_BY_STEP[s.phase.label] || 'single';
+        const timerNote = mode === 'double'
+          ? 'Each work block runs 60s continuously.'
+          : mode === 'single'
+            ? 'Each work block runs 30s left + 30s right with a half-way beep.'
+            : 'Each work block runs 30s grip A + 30s grip B with a half-way beep.';
+        sessionCard.innerHTML = `
+          ${readinessHtml}
+          <div class="section-title">Hypertrophy wave</div>
+          <div class="small">${intro}</div>
+          <div class="section-title" style="margin-top:16px">Clubbell — ${s.phase.label}</div>
+          <div class="small">${s.phase.mode} · ${s.phase.note}<br>${timerNote}</div>
+          <div class="grid" style="margin-top:12px">
+            <div class="exercise"><div class="name">${s.picks.rhythmic.name}</div><div class="meta">Rhythmic · Exercise A</div></div>
+            <div class="exercise"><div class="name">${s.picks.ballistic.name}</div><div class="meta">Ballistic · Exercise B</div></div>
+            <div class="exercise"><div class="name">${s.picks.grinds.name}</div><div class="meta">Grinding · Exercise C</div></div>
+          </div>`;
+        renderTimer();
+        return;
+      }
+
+      sessionCard.innerHTML = `
+        ${readinessHtml}
+        <div class="section-title">Hypertrophy wave</div>
+        <div class="small">${intro}</div>
+        <div class="section-title" style="margin-top:16px">Mace — ${s.phase.label}</div>
         <div class="small">${s.phase.note}</div>
         <div class="exercise" style="margin-top:12px"><div class="name">${s.picks.flow}</div><div class="meta">Mace flow</div></div>`;
       renderTimer();
@@ -749,6 +922,8 @@
     if(!s?.timer) return;
     if(s.type === 'Clubbell') s.timer = buildClubbellTimerState(s.phase.rounds, CLUB_MODE_BY_STEP[s.phase.label] || 'single');
     if(s.type === 'Mace') s.timer = buildMaceTimerState(s.phase.rounds);
+    if(s.type === 'Hypertrophy' && s.planType === 'Clubbell') s.timer = buildClubbellTimerState(s.phase.rounds, CLUB_MODE_BY_STEP[s.phase.label] || 'single');
+    if(s.type === 'Hypertrophy' && s.planType === 'Mace') s.timer = buildMaceTimerState(s.phase.rounds);
     saveState();
     stopTick();
     await releaseWakeLock();
@@ -774,6 +949,9 @@
     if(type === 'Mace'){
       state.waveIndex = (state.waveIndex + 1) % WAVE_PLANS.length;
     }
+    if(type === 'Hypertrophy'){
+      state.hypertrophyIndex = (state.hypertrophyIndex + 1) % HYPERTROPHY_PLANS.length;
+    }
   }
 
   function getCompletedCycles(){
@@ -782,6 +960,7 @@
   }
 
   function shouldOfferCycleDecision(){
+    if(state.recoveryMode === 'hypertrophy') return false;
     const done = Number.isFinite(state.completedSessions) ? state.completedSessions : 0;
     const completedCycles = getCompletedCycles();
     return done > 0 && done % 12 === 0 && completedCycles >= 3;
@@ -804,6 +983,7 @@
 
     state.completedSessions = 0;
     state.waveIndex = 0;
+    state.hypertrophyIndex = 0;
     state.nextSessionIndex = 0;
   }
 
@@ -844,21 +1024,25 @@
       '',
       '1 = Gate recovery',
       '2 = 4 day cycle',
-      '3 = 6 day cycle'
-    ].join('\n'), state.recoveryMode === 'gate' ? '1' : state.recoveryMode === 'cycle4' ? '2' : '3');
+      '3 = 6 day cycle',
+      '4 = Hypertrophy wave'
+    ].join('\n'), state.recoveryMode === 'gate' ? '1' : state.recoveryMode === 'cycle4' ? '2' : state.recoveryMode === 'cycle6' ? '3' : '4');
 
     if(entered === null) return;
 
     const trimmed = String(entered).trim().toLowerCase();
     const nextMode = trimmed in {'1':1,'gate':1,'gate recovery':1} ? 'gate'
-      : trimmed in {'2':1,'4':1,'4 day':1,'4-day':1,'4 day cycle':1,'cycle4':1} ? 'cycle4'
+      : trimmed in {'2':1,'4 day':1,'4-day':1,'4 day cycle':1,'cycle4':1} ? 'cycle4'
       : trimmed in {'3':1,'6':1,'6 day':1,'6-day':1,'6 day cycle':1,'cycle6':1} ? 'cycle6'
+      : trimmed in {'4':1,'hypertrophy':1,'hypertrophy wave':1,'hyper':1} ? 'hypertrophy'
       : null;
 
     if(!nextMode || nextMode === state.recoveryMode) return;
 
     state.recoveryMode = nextMode;
     state.nextSessionIndex = 0;
+    state.waveIndex = 0;
+    state.hypertrophyIndex = 0;
     state.activeSession = null;
     saveState();
     renderSession();
@@ -868,21 +1052,41 @@
   function attachHiddenModeTrigger(){
     if(!appTitleEl) return;
     let pressTimer = null;
+    let modeOpenedFromLongPress = false;
+
+    const clearSelection = () => {
+      try{
+        if(window.getSelection) window.getSelection().removeAllRanges();
+      }catch(e){}
+    };
+
     const clearPress = () => {
       if(pressTimer){
         clearTimeout(pressTimer);
         pressTimer = null;
       }
     };
+
     const startPress = (event) => {
+      modeOpenedFromLongPress = false;
       clearPress();
+      clearSelection();
       pressTimer = setTimeout(() => {
         pressTimer = null;
+        modeOpenedFromLongPress = true;
+        clearSelection();
         openRecoveryModePicker();
-      }, 8000);
+      }, 3000);
     };
+
+    const endPress = () => {
+      clearPress();
+      setTimeout(() => { modeOpenedFromLongPress = false; }, 250);
+    };
+
+    appTitleEl.addEventListener('contextmenu', (event) => event.preventDefault());
     ['mousedown','touchstart','pointerdown'].forEach(evt => appTitleEl.addEventListener(evt, startPress, { passive:true }));
-    ['mouseup','mouseleave','touchend','touchcancel','pointerup','pointercancel'].forEach(evt => appTitleEl.addEventListener(evt, clearPress, { passive:true }));
+    ['mouseup','mouseleave','touchend','touchcancel','pointerup','pointercancel'].forEach(evt => appTitleEl.addEventListener(evt, endPress, { passive:true }));
   }
 
   let state = loadState();
@@ -890,6 +1094,7 @@
   newBtn.addEventListener('click', () => { ensureSession(); renderSession(); });
   finishBtn.addEventListener('click', finishSession);
   resetBtn.addEventListener('click', fullReset);
+  if(modeBtn) modeBtn.addEventListener('click', openRecoveryModePicker);
 
   renderSession();
 })();
